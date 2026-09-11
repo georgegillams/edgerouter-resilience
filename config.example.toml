@@ -1,0 +1,38 @@
+# Copy to config.toml and fill in real values.
+# Deploy config.toml next to the binaries (e.g. /config/scripts/config.toml).
+
+scripts_dir = "/config/scripts"
+log_file = "/tmp/auto-reset-pppoe.log"
+ping_fail_count_file = "/tmp/auto-reset-pppoe-ping-fail-count.log"
+log_last_upload_file = "/tmp/auto-reset-pppoe-last-upload.log"
+conntrack_path = "/usr/sbin/conntrack"
+runop = "/opt/vyatta/bin/vyatta-op-cmd-wrapper"
+
+# LAN host used when reading NAT translations (reveals which public IP is in use).
+nat_probe_device = "192.168.1.10"
+
+# WAN interfaces in preference order (highest preference first).
+# kind = "pppoe"     → reset-pppoe.sh <name>
+# kind = "ethernet"  → reset-ethernet.sh / enable-ethernet.sh / disable-ethernet.sh <name>
+[[wan_interfaces]]
+name = "pppoe0"
+kind = "pppoe"
+
+[[wan_interfaces]]
+name = "pppoe1"
+kind = "pppoe"
+
+[[wan_interfaces]]
+name = "eth2"
+kind = "ethernet"
+
+[webhooks]
+reset_logs_url = "https://example.com/api/v1/webhook/pppoe-reset-logs/notification"
+reset_logs_access_key = "REPLACE_ME"
+router_commands_url = "https://example.com/api/v1/webhooks/notifications/read/router-commands"
+router_commands_access_key = "REPLACE_ME"
+
+[timing]
+post_reset_conntrack_delay_secs = 15
+between_resets_delay_secs = 15
+reboot_delay_secs = 5

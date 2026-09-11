@@ -1,0 +1,7 @@
+# Unused by ./build.sh (that script builds via docker/Dockerfile.er6p).
+# Kept as a hint if you experiment with `cross` directly.
+[build]
+default-target = "mips-unknown-linux-musl"
+
+[target.mips-unknown-linux-musl]
+build-std = true

@@ -1,0 +1,28 @@
+[package]
+name = "edgerouter_scripts"
+version = "0.1.0"
+edition = "2021"
+description = "EdgeRouter maintenance scripts (WAN preference, log upload, remote commands)"
+
+[lib]
+name = "edgerouter_scripts"
+path = "src/lib.rs"
+
+[[bin]]
+name = "auto-reset-pppoe"
+path = "src/bin/auto_reset_pppoe.rs"
+
+[[bin]]
+name = "upload-reset-logs"
+path = "src/bin/upload_reset_logs.rs"
+
+[[bin]]
+name = "execute-remote-commands"
+path = "src/bin/execute_remote_commands.rs"
+
+[profile.release]
+panic = "abort"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+toml = "0.8"

@@ -1,0 +1,68 @@
+# Static 32-bit MIPS BE musl builds for EdgeRouter (ER-4 / ER-6P / ER-8).
+#
+# EdgeOS userspace is ELF 32-bit MSB (o32), even though the CPU is 64-bit
+# capable. A mips64 n64 binary fails on the router with:
+#   Accessing a corrupted shared library
+#
+# Reuse the mips musl *compiler* from the published cross image. Compile on
+# Ubuntu 24.04 so nightly -Zbuild-std works.
+
+FROM ghcr.io/cross-rs/mips-unknown-linux-musl:main AS toolchain
+
+FROM ubuntu:24.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        ca-certificates \
+        curl \
+        build-essential \
+        pkg-config \
+        xz-utils \
+    && rm -rf /var/lib/apt/lists/*
+
+# Nightly is independent of the MIPS toolchain; install it first so toolchain
+# COPY changes do not invalidate this layer.
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+    | sh -s -- -y --default-toolchain nightly --profile minimal \
+    && /root/.cargo/bin/rustup component add rust-src
+ENV PATH="/root/.cargo/bin:${PATH}"
+
+# gcc looks for sysroot/libexec relative to /usr/local/bin/../
+COPY --from=toolchain /usr/local/mips-linux-muslsf /usr/local/mips-linux-muslsf
+COPY --from=toolchain /usr/local/libexec/gcc/mips-linux-muslsf /usr/local/libexec/gcc/mips-linux-muslsf
+COPY --from=toolchain /usr/local/lib/gcc/mips-linux-muslsf /usr/local/lib/gcc/mips-linux-muslsf
+COPY --from=toolchain /usr/local/bin/mips-linux-muslsf-addr2line /usr/local/bin/
+COPY --from=toolchain /usr/local/bin/mips-linux-muslsf-ar /usr/local/bin/
+COPY --from=toolchain /usr/local/bin/mips-linux-muslsf-as /usr/local/bin/
+COPY --from=toolchain /usr/local/bin/mips-linux-muslsf-cpp /usr/local/bin/
+COPY --from=toolchain /usr/local/bin/mips-linux-muslsf-gcc /usr/local/bin/
+COPY --from=toolchain /usr/local/bin/mips-linux-muslsf-gcc-9.2.0 /usr/local/bin/
+COPY --from=toolchain /usr/local/bin/mips-linux-muslsf-gcc-ar /usr/local/bin/
+COPY --from=toolchain /usr/local/bin/mips-linux-muslsf-gcc-nm /usr/local/bin/
+COPY --from=toolchain /usr/local/bin/mips-linux-muslsf-gcc-ranlib /usr/local/bin/
+COPY --from=toolchain /usr/local/bin/mips-linux-muslsf-ld /usr/local/bin/
+COPY --from=toolchain /usr/local/bin/mips-linux-muslsf-ld.bfd /usr/local/bin/
+COPY --from=toolchain /usr/local/bin/mips-linux-muslsf-nm /usr/local/bin/
+COPY --from=toolchain /usr/local/bin/mips-linux-muslsf-objcopy /usr/local/bin/
+COPY --from=toolchain /usr/local/bin/mips-linux-muslsf-objdump /usr/local/bin/
+COPY --from=toolchain /usr/local/bin/mips-linux-muslsf-ranlib /usr/local/bin/
+COPY --from=toolchain /usr/local/bin/mips-linux-muslsf-readelf /usr/local/bin/
+COPY --from=toolchain /usr/local/bin/mips-linux-muslsf-strip /usr/local/bin/
+
+ENV PATH="/usr/local/bin:${PATH}" \
+    CROSS_SYSROOT=/usr/local/mips-linux-muslsf \
+    CARGO_TERM_COLOR=always \
+    CC_mips_unknown_linux_musl=mips-linux-muslsf-gcc \
+    AR_mips_unknown_linux_musl=mips-linux-muslsf-ar \
+    CARGO_TARGET_MIPS_UNKNOWN_LINUX_MUSL_LINKER=mips-linux-muslsf-gcc \
+    CARGO_TARGET_MIPS_UNKNOWN_LINUX_MUSL_AR=mips-linux-muslsf-ar
+
+# rustc's musl unwind crate links -lunwind; this gcc provides that via libgcc_eh.
+RUN ln -sfn /usr/local/lib/gcc/mips-linux-muslsf/9.2.0/libgcc_eh.a \
+        /usr/local/mips-linux-muslsf/lib/libunwind.a \
+    && mips-linux-muslsf-gcc -print-sysroot \
+    && test -x /usr/local/libexec/gcc/mips-linux-muslsf/9.2.0/collect2 \
+    && test -d "$(mips-linux-muslsf-gcc -print-sysroot)"
+
+WORKDIR /work
