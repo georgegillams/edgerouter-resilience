@@ -6,12 +6,25 @@
 //! - `disable-<iface>` / `enable-<iface>` for ethernet WANs
 
 use edgerouter_scripts::config::{self, Config, WanInterface};
+use edgerouter_scripts::http;
+use edgerouter_scripts::timestamp::now_string;
+use serde::Deserialize;
 use std::fs;
 use std::io::Write;
 use std::path::Path;
 use std::process::{Command, ExitCode};
 use std::thread;
 use std::time::Duration;
+
+#[derive(Debug, Deserialize)]
+struct CommandEnvelope {
+    payload: Option<CommandPayload>,
+}
+
+#[derive(Debug, Deserialize)]
+struct CommandPayload {
+    command: Option<String>,
+}
 
 fn main() -> ExitCode {
     let config = match config::load() {
@@ -22,74 +35,35 @@ fn main() -> ExitCode {
         }
     };
 
-    let curl_result = Command::new("curl")
-        .args([
-            "-X",
-            "GET",
-            &config.webhooks.router_commands_url,
-            "-H",
-            &format!("access-key: {}", config.webhooks.router_commands_access_key),
-        ])
-        .output();
+    let body = match http::get_text(
+        &config.webhooks.router_commands_url,
+        &config.webhooks.router_commands_access_key,
+    ) {
+        Ok(body) => body,
+        Err(_) => {
+            println!("No commands to process");
+            return ExitCode::SUCCESS;
+        }
+    };
 
-    let Ok(output) = curl_result else {
+    let Some(command) = parse_command(&body) else {
         println!("No commands to process");
         return ExitCode::SUCCESS;
     };
 
-    let body = format!(
-        "{}{}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
-
-    if !body.contains("\"command\"") {
-        println!("No commands to process");
-        return ExitCode::SUCCESS;
-    }
-
-    let command = extract_command(&body).unwrap_or_default();
     dispatch(&config, &command);
     ExitCode::SUCCESS
 }
 
-fn extract_command(json_body: &str) -> Option<String> {
-    let jq = Command::new("jq")
-        .args(["-r", ".payload.command"])
-        .stdin(std::process::Stdio::piped())
-        .stdout(std::process::Stdio::piped())
-        .spawn();
-
-    if let Ok(mut child) = jq {
-        if let Some(mut stdin) = child.stdin.take() {
-            let _ = stdin.write_all(json_body.as_bytes());
-        }
-        if let Ok(output) = child.wait_with_output() {
-            if output.status.success() {
-                let value = String::from_utf8_lossy(&output.stdout).trim().to_string();
-                if !value.is_empty() && value != "null" {
-                    return Some(value);
-                }
-            }
-        }
+fn parse_command(json_body: &str) -> Option<String> {
+    let parsed: CommandEnvelope = serde_json::from_str(json_body).ok()?;
+    let command = parsed.payload?.command?;
+    let command = command.trim().to_string();
+    if command.is_empty() {
+        None
+    } else {
+        Some(command)
     }
-
-    const KEY: &str = "\"command\"";
-    let idx = json_body.find(KEY)?;
-    let after = &json_body[idx + KEY.len()..];
-    let after = after.trim_start().trim_start_matches(':').trim_start();
-    let after = after.trim_start_matches('"');
-    let end = after.find('"')?;
-    Some(after[..end].to_string())
-}
-
-fn now_string() -> String {
-    Command::new("date")
-        .output()
-        .ok()
-        .and_then(|o| String::from_utf8(o.stdout).ok())
-        .map(|s| s.trim().to_string())
-        .unwrap_or_else(|| "unknown-date".to_string())
 }
 
 fn append_log(config: &Config, message: &str) {
@@ -168,5 +142,33 @@ fn dispatch(config: &Config, command: &str) {
             }
         }
         return;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn extracts_payload_command() {
+        let body = r#"{"payload":{"command":"reset-pppoe0"}}"#;
+        assert_eq!(parse_command(body).as_deref(), Some("reset-pppoe0"));
+    }
+
+    #[test]
+    fn trims_and_rejects_empty_command() {
+        assert_eq!(
+            parse_command(r#"{"payload":{"command":"  restart  "}}"#).as_deref(),
+            Some("restart")
+        );
+        assert_eq!(parse_command(r#"{"payload":{"command":"   "}}"#), None);
+    }
+
+    #[test]
+    fn missing_or_invalid_body_is_none() {
+        assert_eq!(parse_command("{}"), None);
+        assert_eq!(parse_command(r#"{"payload":{}}"#), None);
+        assert_eq!(parse_command("not json"), None);
+        assert_eq!(parse_command(""), None);
     }
 }

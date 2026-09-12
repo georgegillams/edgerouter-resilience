@@ -1,8 +1,15 @@
 //! Upload new lines from the auto-reset log to the webhook.
 
 use edgerouter_scripts::config::{self, Config};
+use edgerouter_scripts::http;
+use serde::Serialize;
 use std::fs;
-use std::process::{Command, ExitCode};
+use std::process::ExitCode;
+
+#[derive(Serialize)]
+struct LogsBody<'a> {
+    logs: &'a str,
+}
 
 fn main() -> ExitCode {
     let config = match config::load() {
@@ -30,36 +37,21 @@ fn main() -> ExitCode {
         return ExitCode::SUCCESS;
     }
 
-    let logs_single_line = collapse_newlines(&logs_since_last_upload);
-
-    let curl_output = Command::new("curl")
-        .args([
-            "-X",
-            "POST",
-            &config.webhooks.reset_logs_url,
-            "-H",
-            &format!("access-key: {}", config.webhooks.reset_logs_access_key),
-            "-H",
-            "Content-Type: application/json",
-            "-d",
-            &format!("{{\"logs\": \"{}\"}}", logs_single_line),
-            "-i",
-        ])
-        .output();
-
-    let Ok(output) = curl_output else {
-        println!("Failed to upload logs");
-        return ExitCode::from(1);
+    let status = match http::post_json(
+        &config.webhooks.reset_logs_url,
+        &config.webhooks.reset_logs_access_key,
+        &LogsBody {
+            logs: &logs_since_last_upload,
+        },
+    ) {
+        Ok(status) => status,
+        Err(_) => {
+            println!("Failed to upload logs");
+            return ExitCode::from(1);
+        }
     };
 
-    let combined = format!(
-        "{}{}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
-
-    let http_status = parse_http_status(&combined);
-    if http_status != Some(200) {
+    if status != 200 {
         println!("Failed to upload logs");
         return ExitCode::from(1);
     }
@@ -116,23 +108,16 @@ fn new_log_lines(config: &Config, from_line_number: i32) -> String {
         .join("\n")
 }
 
-fn collapse_newlines(logs: &str) -> String {
-    if cfg!(target_os = "macos") {
-        logs.replace('\n', ".")
-    } else {
-        logs.replace('\n', "\\n")
-    }
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-fn parse_http_status(curl_headers_and_body: &str) -> Option<u16> {
-    for token_window in curl_headers_and_body
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .windows(2)
-    {
-        if token_window[0].contains("HTTP") {
-            return token_window[1].parse().ok();
-        }
+    #[test]
+    fn logs_body_json_escapes_newlines_and_quotes() {
+        let body = LogsBody {
+            logs: "line 1\nline \"two\"",
+        };
+        let json = serde_json::to_string(&body).unwrap();
+        assert_eq!(json, r#"{"logs":"line 1\nline \"two\""}"#);
     }
-    None
 }

@@ -10,6 +10,7 @@
 
 use edgerouter_scripts::config::{self, Config, WanInterface};
 use edgerouter_scripts::ip_test;
+use edgerouter_scripts::timestamp::{local_hour_minute, now_string};
 use std::fs;
 use std::path::Path;
 use std::process::{Command, ExitCode};
@@ -30,7 +31,7 @@ fn main() -> ExitCode {
     let wan_ips: Vec<(String, Option<String>)> = config
         .wan_interfaces
         .iter()
-        .map(|w| (w.name.clone(), interface_has_inet(&w.name)))
+        .map(|w| (w.name.clone(), ip_test::interface_ipv4(&w.name)))
         .collect();
 
     for (name, ip) in &wan_ips {
@@ -52,29 +53,6 @@ fn main() -> ExitCode {
     }
 
     ExitCode::SUCCESS
-}
-
-fn interface_has_inet(interface: &str) -> Option<String> {
-    let output = Command::new("ip")
-        .args(["addr", "show", interface])
-        .output()
-        .ok()?;
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    for line in stdout.lines() {
-        if line.contains("inet ") {
-            return Some(line.trim().to_string());
-        }
-    }
-    None
-}
-
-fn now_string() -> String {
-    Command::new("date")
-        .output()
-        .ok()
-        .and_then(|o| String::from_utf8(o.stdout).ok())
-        .map(|s| s.trim().to_string())
-        .unwrap_or_else(|| "unknown-date".to_string())
 }
 
 fn append_log(config: &Config, message: &str) {
@@ -121,30 +99,8 @@ fn flush_conntrack(config: &Config) {
     }
 }
 
-fn current_hour_minute() -> Option<(u32, u32)> {
-    let hour = Command::new("date")
-        .args(["+%H"])
-        .output()
-        .ok()
-        .and_then(|o| String::from_utf8(o.stdout).ok())?
-        .trim()
-        .parse()
-        .ok()?;
-    let minute = Command::new("date")
-        .args(["+%M"])
-        .output()
-        .ok()
-        .and_then(|o| String::from_utf8(o.stdout).ok())?
-        .trim()
-        .parse()
-        .ok()?;
-    Some((hour, minute))
-}
-
 fn maybe_log_scheduled_status(config: &Config, wan_ips: &[(String, Option<String>)]) {
-    let Some((hour, minute)) = current_hour_minute() else {
-        return;
-    };
+    let (hour, minute) = local_hour_minute();
     if (hour == 2 || hour == 14) && (2..=8).contains(&minute) {
         let summary: Vec<String> = wan_ips
             .iter()
