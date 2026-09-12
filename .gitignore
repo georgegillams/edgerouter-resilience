@@ -1,6 +1,7 @@
 /target/
 /dist/
+# Site secrets next to the binaries. Do not use a bare `config.toml` rule —
+# that also ignores `.cargo/config.toml`, which must be committed for MIPS builds.
 /config.toml
 .DS_Store
 **/*.rs.bk
-config.toml

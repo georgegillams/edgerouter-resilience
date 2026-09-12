@@ -1,0 +1,17 @@
+[target.mips-unknown-linux-musl]
+# Docker image sets CC/linker via env; these are fallbacks.
+linker = "mips-linux-muslsf-gcc"
+ar = "mips-linux-muslsf-ar"
+# Tier 3 musl has no rustc self-contained CRT objects; let gcc supply them.
+# relocation-model=static avoids PIE, which older EdgeOS kernels reject.
+# -lgcc provides 32-bit helpers (e.g. __ucmpdi2) used by vendored OpenSSL;
+# rustc's -nodefaultlibs static musl link does not pull those in otherwise.
+rustflags = [
+    "-C", "target-feature=+crt-static",
+    "-C", "link-self-contained=no",
+    "-C", "relocation-model=static",
+    "-C", "link-arg=-static",
+    "-C", "link-arg=-lgcc",
+    "-L", "/usr/local/mips-linux-muslsf/lib",
+    "-L", "/usr/local/lib/gcc/mips-linux-muslsf/9.2.0",
+]

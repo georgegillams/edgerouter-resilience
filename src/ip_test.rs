@@ -134,33 +134,18 @@ fn nat_ip_for_device(runop: &str, device: &str) -> Option<String> {
     None
 }
 
-fn interface_ipv4(interface: &str) -> Option<String> {
-    let output = Command::new("ip")
-        .args(["addr", "show", interface])
-        .output()
-        .ok()?;
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    for line in stdout.lines() {
-        let trimmed = line.trim();
-        let Some(rest) = trimmed.strip_prefix("inet ") else {
-            continue;
-        };
-        let addr = rest.split_whitespace().next()?;
-        let ip = addr.split('/').next()?;
-        if is_ipv4(ip) {
-            return Some(ip.to_string());
+/// IPv4 address assigned to `interface`, if any.
+pub fn interface_ipv4(interface: &str) -> Option<String> {
+    let ifaces = if_addrs::get_if_addrs().ok()?;
+    ifaces.into_iter().find_map(|iface| {
+        if iface.name != interface {
+            return None;
         }
-    }
-    None
-}
-
-fn is_ipv4(s: &str) -> bool {
-    let parts: Vec<_> = s.split('.').collect();
-    if parts.len() != 4 {
-        return false;
-    }
-    parts.iter().all(|p| p.parse::<u8>().is_ok())
+        match iface.addr {
+            if_addrs::IfAddr::V4(v4) => Some(v4.ip.to_string()),
+            _ => None,
+        }
+    })
 }
 
 #[cfg(test)]
