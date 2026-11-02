@@ -40,6 +40,18 @@ pub fn get_text(url: &str, access_key: &str) -> Result<String, String> {
         .map_err(|err| err.to_string())
 }
 
+/// Plain GET with no auth headers. Returns the response body.
+pub fn get_plain(url: &str) -> Result<String, String> {
+    let mut response = agent()
+        .get(url)
+        .call()
+        .map_err(|err| err.to_string())?;
+    response
+        .body_mut()
+        .read_to_string()
+        .map_err(|err| err.to_string())
+}
+
 /// POST JSON `body` with the webhook `access-key` header. Returns the HTTP status.
 pub fn post_json<T: Serialize>(url: &str, access_key: &str, body: &T) -> Result<u16, String> {
     let response = agent()

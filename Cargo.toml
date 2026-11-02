@@ -20,6 +20,10 @@ path = "src/bin/upload_reset_logs.rs"
 name = "execute-remote-commands"
 path = "src/bin/execute_remote_commands.rs"
 
+[[bin]]
+name = "network-monitor-ip-reporter"
+path = "src/bin/network_monitor_ip_reporter.rs"
+
 [profile.release]
 panic = "abort"
 

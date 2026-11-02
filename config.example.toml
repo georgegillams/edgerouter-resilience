@@ -36,3 +36,18 @@ router_commands_access_key = "REPLACE_ME"
 post_reset_conntrack_delay_secs = 15
 between_resets_delay_secs = 15
 reboot_delay_secs = 5
+
+# Report selected WAN IPv4 addresses to a LAN network-monitor service.
+# GET {base_url}/{path}?{ip} for each target whose interface has an address.
+[ip_reporter]
+base_url = "http://192.168.1.96:3001"
+
+[[ip_reporter.targets]]
+interface = "pppoe0"
+path = "add-fttp-ip"
+label = "FTTP"
+
+[[ip_reporter.targets]]
+interface = "pppoe1"
+path = "add-fttc-ip"
+label = "FTTC"
