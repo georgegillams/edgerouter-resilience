@@ -53,7 +53,9 @@ docker run --rm --platform linux/amd64 \
     -Z build-std=std,panic_abort
 
 BIN_DIR="${HOST_TARGET_DIR}/${TARGET}/release"
-for bin in auto-reset-pppoe upload-reset-logs execute-remote-commands; do
+BINS=(auto-reset-pppoe upload-reset-logs execute-remote-commands network-monitor-ip-reporter)
+
+for bin in "${BINS[@]}"; do
   if [[ ! -f "${BIN_DIR}/${bin}" ]]; then
     echo "error: missing binary: ${BIN_DIR}/${bin}" >&2
     exit 1
@@ -61,7 +63,7 @@ for bin in auto-reset-pppoe upload-reset-logs execute-remote-commands; do
 done
 
 if command -v file >/dev/null 2>&1; then
-  for bin in auto-reset-pppoe upload-reset-logs execute-remote-commands; do
+  for bin in "${BINS[@]}"; do
     info="$(file "${BIN_DIR}/${bin}")"
     echo "${info}"
     if echo "${info}" | grep -qi 'dynamically linked'; then
@@ -83,9 +85,9 @@ echo "Assembling ${DIST}..."
 rm -rf "${DIST}"
 mkdir -p "${DIST}"
 
-cp "${BIN_DIR}/auto-reset-pppoe" "${DIST}/"
-cp "${BIN_DIR}/upload-reset-logs" "${DIST}/"
-cp "${BIN_DIR}/execute-remote-commands" "${DIST}/"
+for bin in "${BINS[@]}"; do
+  cp "${BIN_DIR}/${bin}" "${DIST}/"
+done
 cp "${ROOT}"/src/*.sh "${DIST}/"
 cp "${ROOT}/config.example.toml" "${DIST}/"
 

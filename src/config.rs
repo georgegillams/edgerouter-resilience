@@ -29,6 +29,40 @@ pub struct Webhooks {
     pub router_commands_access_key: String,
 }
 
+/// Report a WAN interface's IPv4 to a network-monitor endpoint.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct IpReporterTarget {
+    /// Interface name (e.g. `pppoe0`).
+    pub interface: String,
+    /// Path appended to `base_url` (e.g. `add-fttp-ip` → `{base}/{path}?{ip}`).
+    pub path: String,
+    /// Optional label for log lines (defaults to `interface`).
+    #[serde(default)]
+    pub label: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Default)]
+pub struct IpReporter {
+    /// Base URL of the network monitor (e.g. `http://192.168.1.96:3001`).
+    #[serde(default)]
+    pub base_url: String,
+    #[serde(default)]
+    pub targets: Vec<IpReporterTarget>,
+}
+
+impl IpReporter {
+    pub fn is_configured(&self) -> bool {
+        !self.base_url.trim().is_empty() && !self.targets.is_empty()
+    }
+
+    /// `{base_url}/{path}?{ip}`
+    pub fn report_url(&self, path: &str, ip: &str) -> String {
+        let base = self.base_url.trim_end_matches('/');
+        let path = path.trim_start_matches('/');
+        format!("{}/{}?{}", base, path, ip)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct Timing {
     #[serde(default = "default_post_reset_conntrack_delay_secs")]
@@ -75,6 +109,9 @@ pub struct Config {
     pub webhooks: Webhooks,
     #[serde(default)]
     pub timing: Timing,
+    /// Optional: report selected WAN IPs to a LAN network-monitor service.
+    #[serde(default)]
+    pub ip_reporter: IpReporter,
 }
 
 impl Config {
@@ -199,10 +236,28 @@ reset_logs_url = "https://example.com/logs"
 reset_logs_access_key = "key1"
 router_commands_url = "https://example.com/commands"
 router_commands_access_key = "key2"
+
+[ip_reporter]
+base_url = "http://192.168.1.96:3001"
+
+[[ip_reporter.targets]]
+interface = "pppoe0"
+path = "add-fttp-ip"
+label = "FTTP"
+
+[[ip_reporter.targets]]
+interface = "pppoe1"
+path = "add-fttc-ip"
+label = "FTTC"
 "#;
         let config: Config = toml::from_str(toml).unwrap();
         assert_eq!(config.wan_interfaces.len(), 3);
         assert_eq!(config.primary_wan().unwrap().name, "pppoe0");
         assert_eq!(config.timing.post_reset_conntrack_delay_secs, 15);
+        assert!(config.ip_reporter.is_configured());
+        assert_eq!(
+            config.ip_reporter.report_url("add-fttp-ip", "1.2.3.4"),
+            "http://192.168.1.96:3001/add-fttp-ip?1.2.3.4"
+        );
     }
 }

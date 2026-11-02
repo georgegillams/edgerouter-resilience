@@ -85,7 +85,7 @@ cargo test
 
 ```bash
 scp dist/* user@router:/tmp/
-ssh -t user@router 'sudo cp /tmp/auto-reset-pppoe /tmp/upload-reset-logs /tmp/execute-remote-commands /tmp/*.sh /tmp/*.toml /config/scripts/ && sudo chmod +x /config/scripts/* && sudo chmod a-x /config/scripts/*.toml'
+ssh -t user@router 'sudo cp /tmp/auto-reset-pppoe /tmp/upload-reset-logs /tmp/execute-remote-commands /tmp/network-monitor-ip-reporter /tmp/*.sh /tmp/*.toml /config/scripts/ && sudo chmod +x /config/scripts/* && sudo chmod a-x /config/scripts/*.toml'
 ```
 
 On the router:
@@ -104,3 +104,4 @@ file /config/scripts/auto-reset-pppoe
 | `ip_test` | Library only |
 | `upload-reset-logs` | Rust + `.sh` wrapper |
 | `execute-remote-commands` | Rust + `.sh` wrapper |
+| `network-monitor-ip-reporter` | Rust + `.sh` wrapper; reports WAN IPs from `[ip_reporter]` |
